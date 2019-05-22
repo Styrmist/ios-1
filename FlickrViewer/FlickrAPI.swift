@@ -1,0 +1,187 @@
+import UIKit
+
+struct Error {
+    var message: String
+}
+
+class FlickrAPI {
+    
+    static var searchPage = 1
+    static var allSearchPages = 0
+    static var locationPage = 1
+    static var allLocationPages = 0
+    
+    class func prepareURL(_ params: [String: Any]) -> URL {
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = "api.flickr.com"
+        components.path = "/services/rest/"
+        components.queryItems = [URLQueryItem]()
+        
+        components.queryItems!.append(URLQueryItem(name: "api_key", value: FlickrAPIConst.apiKey))
+        components.queryItems!.append(URLQueryItem(name: "extras", value: "url_m"))
+        components.queryItems!.append(URLQueryItem(name: "format", value: "json"))
+        components.queryItems!.append(URLQueryItem(name: "nojsoncallback", value: "1"))
+        
+        for (key, value) in params {
+            components.queryItems!.append(URLQueryItem(name: key, value: "\(value)"))
+        }
+        
+        return components.url!
+    }
+    
+    class func searchPhotos(text: String, completionHandler: @escaping ([[String: AnyObject]], Error?) -> Void) {
+        if allSearchPages != 0 && searchPage == allSearchPages{
+            return
+        }
+        var params = [
+            "method": "flickr.photos.search",
+            "in_gallery": 1,
+            "text": text,
+            "per_page": FlickrAPIConst.perPage,
+            "page": searchPage
+        ] as [String: Any]
+        
+        func handleError(_ message: String) {
+            completionHandler([[:]], Error(message: message))
+        }
+        
+        let task = URLSession.shared.dataTask(with: prepareURL(params)) { (data, response, error) in
+            guard (error == nil) else {
+                handleError("There was an error with your request: \(String(describing: error))")
+                return
+            }
+            
+            guard let data = data else {
+                handleError("No data was returned by the request!")
+                return
+            }
+            
+            var parsedResult: [String: AnyObject]!
+            do {
+                parsedResult = try JSONSerialization.jsonObject(with: data, options: .allowFragments) as! [String: AnyObject]
+            } catch {
+                handleError("Could not parse the data as JSON: '\(data)'")
+                return
+            }
+            
+            guard let stat = parsedResult["stat"] as? String, stat == "ok" else {
+                handleError("Stat fail '\(parsedResult)'")
+                return
+            }
+            
+            guard let photosDict = parsedResult["photos"] as? [String: AnyObject],
+                let allPages = photosDict["pages"] as? Int,
+                let photosArray = photosDict["photo"] as? [[String: AnyObject]] else
+            {
+                handleError("Missing key photos or photo")
+                return
+            }
+            allSearchPages = allPages
+            searchPage += 1
+            completionHandler(photosArray, nil)
+        }
+        task.resume()
+    }
+    
+    class func locationPhotos(longitude: Double, latitude: Double, completionHandler: @escaping ([[String: AnyObject]], Error?) -> Void) {
+        if allLocationPages != 0 && locationPage == allLocationPages {
+            return
+        }
+        var params = [
+            "method": "flickr.photos.search",
+            "in_gallery": 1,
+            "lat": latitude,
+            "lon": longitude,
+            "per_page": FlickrAPIConst.perPage,
+            "page": locationPage
+            ] as [String: Any]
+        
+        func handleError(_ message: String) {
+            completionHandler([[:]], Error(message: message))
+        }
+        
+        let task = URLSession.shared.dataTask(with: prepareURL(params)) { (data, response, error) in
+            guard (error == nil) else {
+                handleError("There was an error with your request: \(String(describing: error))")
+                return
+            }
+            
+            guard let data = data else {
+                handleError("No data was returned by the request!")
+                return
+            }
+            
+            var parsedResult: [String: AnyObject]!
+            do {
+                parsedResult = try JSONSerialization.jsonObject(with: data, options: .allowFragments) as! [String: AnyObject]
+            } catch {
+                handleError("Could not parse the data as JSON: '\(data)'")
+                return
+            }
+            
+            guard let stat = parsedResult["stat"] as? String, stat == "ok" else {
+                handleError("Stat fail '\(parsedResult)'")
+                return
+            }
+            
+            guard let photosDict = parsedResult["photos"] as? [String: AnyObject],
+                let allPages = photosDict["pages"] as? Int,
+                let photosArray = photosDict["photo"] as? [[String: AnyObject]] else
+            {
+                handleError("Missing key photos or photo")
+                return
+            }
+            allLocationPages = allPages
+            locationPage += 1
+            completionHandler(photosArray, nil)
+        }
+        task.resume()
+    }
+    
+    class func getPhotos(_ galleryID: Int, completionHandler: @escaping ([[String: AnyObject]], Error?) -> Void) {
+        
+        var params = [
+            "method": "flickr.galleries.getPhotos",
+            "gallery_id": galleryID,
+        ] as [String: Any]
+        
+        func handleError(_ message: String) {
+            completionHandler([[:]], Error(message: message))
+        }
+        
+        let task = URLSession.shared.dataTask(with: prepareURL(params)) { (data, response, error) in
+            guard (error == nil) else {
+                handleError("There was an error with your request: \(String(describing: error))")
+                return
+            }
+            
+            guard let data = data else {
+                handleError("No data was returned by the request!")
+                return
+            }
+            
+            var parsedResult: [String: AnyObject]!
+            do {
+                parsedResult = try JSONSerialization.jsonObject(with: data, options: .allowFragments) as! [String: AnyObject]
+            } catch {
+                handleError("Could not parse the data as JSON: '\(data)'")
+                return
+            }
+            
+            guard let stat = parsedResult["stat"] as? String, stat == "ok" else {
+                handleError("Stat fail \(parsedResult)")
+                return
+            }
+            
+            guard let photosDict = parsedResult["photos"] as? [String: AnyObject],
+                let photosArray = photosDict["photo"] as? [[String: AnyObject]] else
+            {
+                handleError("Missing key photos or photo")
+                return
+            }
+            completionHandler(photosArray, nil)
+        }
+        task.resume()
+    }
+}
