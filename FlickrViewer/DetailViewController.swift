@@ -3,9 +3,7 @@ import UIKit
 class DetailViewController: UIViewController, UIScrollViewDelegate {
     
     var imageLink = ""
-    var imageObj = UIImage(named: "")
-    
- 
+
     @IBOutlet weak var detailScrollView: UIScrollView!
     @IBOutlet weak var detailImageView: UIImageView!
     
@@ -13,10 +11,9 @@ class DetailViewController: UIViewController, UIScrollViewDelegate {
         super.viewDidLoad()
         detailScrollView.delegate = self
         detailScrollView.minimumZoomScale = 1.0
-        detailScrollView.maximumZoomScale = 5.0
+        detailScrollView.maximumZoomScale = 4.0
         detailScrollView.contentSize = .init(width: 2000, height: 2000)
         updateZoomFor(size: view.bounds.size)
-
         detailImageView.load(url: URL(string: imageLink)!)
         
     }

@@ -1,38 +1,34 @@
 import UIKit
-import CoreLocation
 
-private let reuseIdentifier = "Cell"
-private let ImageViewTag = 1
-var latitude : Double = 0
-var longitude : Double = 0
-
-class SearchCollectionViewController: UICollectionViewController, CLLocationManagerDelegate {
+class SearchCollectionViewController: UICollectionViewController {
     
+    private let reuseIdentifier = "Cell"
+    private let ImageViewTag = 1
     var textSearch = ""
-    let locationManager = CLLocationManager()
     var photos = [[String: AnyObject]]()
+    var curPage = 1
+    var allPages = 0
+    
     @IBOutlet weak var searchField: UITextField!
     @IBAction func search(_ sender: UITextField) {
         if let text = searchField.text {
             textSearch = text
         }
-        FlickrAPI.searchPhotos(text: textSearch) { (photosArray, error) in
+        
+//        self.collectionView?.scrollToItem(at: IndexPath(row: 0, section: 0), at: .top, animated: true)
+        FlickrAPI.searchPhotos(page: curPage, text: textSearch) { (photosArray, allPages, error) in
             self.photos = photosArray
+            self.curPage += 1
+            self.allPages = allPages
             DispatchQueue.main.async {
                 self.collectionView?.reloadData()
+                self.collectionView.scrollToItem(at: IndexPath(row: 0, section: 0), at: .top, animated: true)
             }
         }
     }
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        locationManager.requestAlwaysAuthorization()
-        locationManager.requestWhenInUseAuthorization()
-        if CLLocationManager.locationServicesEnabled() {
-                locationManager.delegate = self
-                locationManager.desiredAccuracy = kCLLocationAccuracyNearestTenMeters
-                locationManager.startUpdatingLocation()
-        }
         
         collectionView?.register(SearchCollectionViewCell.self, forCellWithReuseIdentifier: "cell")
         collectionView?.prefetchDataSource = self
@@ -48,21 +44,6 @@ class SearchCollectionViewController: UICollectionViewController, CLLocationMana
         layout.minimumLineSpacing = minimumLineSpacing
         
         layout.itemSize = CGSize(width: width, height: width)
-        
-        FlickrAPI.searchPhotos(text: textSearch) { (photosArray, error) in
-            self.photos = photosArray
-            DispatchQueue.main.async {
-                self.collectionView?.reloadData()
-            }
-        }
-    }
-    
-    
-    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        guard let location: CLLocationCoordinate2D = manager.location?.coordinate else { return }
-        latitude = location.latitude
-        longitude = location.longitude
-        locationManager.stopUpdatingLocation()
     }
 
     override func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
@@ -97,10 +78,14 @@ class SearchCollectionViewController: UICollectionViewController, CLLocationMana
 extension SearchCollectionViewController: UICollectionViewDataSourcePrefetching {
     func collectionView(_ collectionView: UICollectionView, prefetchItemsAt indexPaths: [IndexPath]) {
         if indexPaths.last?[1] == photos.count - 1  {
-            FlickrAPI.searchPhotos(text: textSearch) { (photosArray, error) in
-                self.photos += photosArray
-                DispatchQueue.main.async {
-                    self.collectionView?.reloadData()
+            if allPages != 0 && curPage < allPages {
+                FlickrAPI.searchPhotos(page: curPage, text: textSearch) { (photosArray, allPages, error) in
+                    self.photos += photosArray
+                    self.curPage += 1
+                    self.allPages = allPages
+                    DispatchQueue.main.async {
+                        self.collectionView?.reloadData()
+                    }
                 }
             }
         }

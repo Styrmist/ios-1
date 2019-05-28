@@ -1,14 +1,25 @@
 import UIKit
+import CoreLocation
 
-private let reuseIdentifier = "Cell"
-private let ImageViewTag = 1
-
-class LocationCollectionViewController: UICollectionViewController {
+class LocationCollectionViewController: UICollectionViewController, CLLocationManagerDelegate {
     
+    private let reuseIdentifier = "Cell"
+    private let ImageViewTag = 1
+    let locationManager = CLLocationManager()
     var photos = [[String: AnyObject]]()
+    var curPage = 1
+    var allPages = 0
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        
+        locationManager.requestAlwaysAuthorization()
+        locationManager.requestWhenInUseAuthorization()
+        if CLLocationManager.locationServicesEnabled() {
+            locationManager.delegate = self
+            locationManager.desiredAccuracy = kCLLocationAccuracyNearestTenMeters
+            locationManager.startUpdatingLocation()
+        }
         
         collectionView?.register(LocationCollectionViewCell.self, forCellWithReuseIdentifier: "cell")
         collectionView?.prefetchDataSource = self
@@ -16,21 +27,12 @@ class LocationCollectionViewController: UICollectionViewController {
         let minimumInterItemSpacing: CGFloat = 3
         let minimumLineSpacing: CGFloat = 3
         let numberOfColumns: CGFloat = 3
-        
+    
         let width = ((collectionView?.frame.width)! - minimumInterItemSpacing - minimumLineSpacing) / numberOfColumns
-        
         let layout = collectionViewLayout as! UICollectionViewFlowLayout
         layout.minimumInteritemSpacing = minimumInterItemSpacing
         layout.minimumLineSpacing = minimumLineSpacing
-        
         layout.itemSize = CGSize(width: width, height: width)
-        FlickrAPI.locationPhotos(longitude: -0.1337, latitude: 51.50998) { (photosArray, error) in
-            self.photos = photosArray
-            DispatchQueue.main.async {
-                self.collectionView?.reloadData()
-            }
-        }
-    
     }
 
     override func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
@@ -40,15 +42,26 @@ class LocationCollectionViewController: UICollectionViewController {
     override func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         
         let cell = collectionView.dequeueReusableCell(withReuseIdentifier: reuseIdentifier, for: indexPath) as! LocationCollectionViewCell
-        
         let photoDict = photos[(indexPath as NSIndexPath).row]
-        
-        if let imageUrlString = photoDict["url_m"] as? String
-        {
+        if let imageUrlString = photoDict["url_m"] as? String {
             cell.imageView.loadFromURL(imageUrlString)
         }
-        
         return cell
+    }
+    
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        guard let location: CLLocationCoordinate2D = manager.location?.coordinate else { return }
+        FlickrAPIConst.latitude = Double(round(1000 * location.latitude) / 1000)
+        FlickrAPIConst.longitude = Double(round(1000 * location.longitude) / 1000)
+        FlickrAPI.searchPhotos(page: curPage, longitude: FlickrAPIConst.longitude, latitude: FlickrAPIConst.latitude) { (photosArray, allPages, error) in
+            self.photos = photosArray
+            self.curPage += 1
+            self.allPages = allPages
+            DispatchQueue.main.async {
+                self.collectionView?.reloadData()
+                self.collectionView?.scrollToItem(at: IndexPath(row: 0, section: 0), at: .top, animated: true)
+            }
+        }
     }
 
     override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
@@ -64,10 +77,14 @@ class LocationCollectionViewController: UICollectionViewController {
 extension LocationCollectionViewController: UICollectionViewDataSourcePrefetching {
     func collectionView(_ collectionView: UICollectionView, prefetchItemsAt indexPaths: [IndexPath]) {
         if indexPaths.last?[1] == photos.count - 1  {
-            FlickrAPI.locationPhotos(longitude: longitude, latitude: latitude) { (photosArray, error) in
-                self.photos += photosArray
-                DispatchQueue.main.async {
-                    self.collectionView?.reloadData()
+            if allPages != 0 && curPage < allPages {
+                FlickrAPI.searchPhotos(page: curPage, longitude: FlickrAPIConst.longitude, latitude: FlickrAPIConst.latitude) { (photosArray, allPages, error) in
+                    self.photos += photosArray
+                    self.curPage += 1
+                    self.allPages = allPages
+                    DispatchQueue.main.async {
+                        self.collectionView?.reloadData()
+                    }
                 }
             }
         }
